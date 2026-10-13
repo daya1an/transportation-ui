@@ -1,0 +1,50 @@
+@import "tailwindcss";
+@import "primeicons/primeicons.css";
+
+/* Dark mode is a class on <html>, toggled by the theme switcher (not the OS media query) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Tailwind colors read the PrimeReact theme variables, so every utility follows the active theme */
+@theme inline {
+  --color-surface: var(--surface-ground);
+  --color-card: var(--surface-card);
+  --color-line: var(--surface-border);
+  --color-fg: var(--text-color);
+  --color-muted: var(--text-color-secondary);
+  --color-accent: var(--primary-color);
+}
+
+/* Navy dark palette. Higher specificity than the theme's :root block, so load order does not matter */
+html.dark {
+  --surface-ground: #060b16;
+  --surface-card: #0b1324;
+  --surface-section: #0b1324;
+  --surface-overlay: #0b1324;
+  --surface-border: #1c2842;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--surface-ground);
+  color: var(--text-color);
+  font-family: var(--font-family);
+}
+
+/* PrimeReact wraps the password input in an icon-field div that does not stretch inside its flex parent */
+@layer components {
+  .p-password > .p-icon-field {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+/* Buttons that stretch full width should keep icon and label together in the middle */
+@layer components {
+  .p-button {
+    justify-content: center;
+  }
+  .p-button .p-button-label {
+    flex: 0 1 auto;
+  }
+}

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trips dashboard</title>
+    <meta name="theme-color" content="#060b16" />
+    <!-- Declares the CSS layer order before any stylesheet loads. PrimeReact's theme lives in @layer primereact,
+         so it must rank above Tailwind's preflight (base) and below Tailwind's components and utilities.
+         Without this line the preflight wins and PrimeReact buttons and inputs lose their padding and borders. -->
+    <style>
+      @layer theme, base, primereact, components, utilities;
+    </style>
+    <!-- PrimeReact theme. The switcher swaps this file at runtime, so both live in /public/themes -->
+    <link
+      id="theme-link"
+      rel="stylesheet"
+      href="%BASE_URL%themes/lara-dark-blue/theme.css"
+      data-light="%BASE_URL%themes/lara-light-blue/theme.css"
+      data-dark="%BASE_URL%themes/lara-dark-blue/theme.css"
+    />
+    <script>
+      // Runs before first paint, so the page never flashes the wrong theme.
+      // Saved choice wins, otherwise the operating system preference.
+      (function () {
+        var link = document.getElementById('theme-link');
+        var saved = null;
+        try { saved = localStorage.getItem('trips.theme'); } catch (e) {}
+        var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var mode = dark ? 'dark' : 'light';
+        link.setAttribute('href', link.getAttribute('data-' + mode));
+        document.documentElement.classList.toggle('dark', dark);
+        document.documentElement.style.colorScheme = mode;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

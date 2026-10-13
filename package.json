@@ -1,0 +1,36 @@
+{
+  "name": "dashboard-web",
+  "version": "0.1.0",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "vite",
+    "predev": "node scripts/copy-themes.mjs",
+    "prebuild": "node scripts/copy-themes.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:watch": "vitest",
+    "postinstall": "node scripts/copy-themes.mjs"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.104.1",
+    "chart.js": "^4.5.1",
+    "primeicons": "^7.0.0",
+    "primereact": "^10.9.9",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.1.1",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  },
+  "private": "true",
+  "type": "module"
+}

@@ -97,6 +97,22 @@ describe('dashboard shell and page', () => {
     expect(await screen.findByText(/All cities, 29 Sept 2025 to 27 Dec 2025|All cities, 29 Sep 2025 to 27 Dec 2025/)).toBeInTheDocument()
   })
 
+  it('shows one clear error with Try again when the warehouse is down, instead of an endless spinner', async () => {
+    api.getMeta.mockRejectedValueOnce(
+      new ApiError({ status: 503, code: 'warehouse_unavailable', retryAfter: 5, message: 'The Databricks SQL warehouse is not accepting connections right now.' }),
+    )
+    renderApp()
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('The data warehouse is not responding')
+    expect(screen.queryByRole('button', { name: /weekly/i })).not.toBeInTheDocument() // no filters without a city list
+    expect(screen.queryByLabelText('Loading')).not.toBeInTheDocument()
+    expect(api.getMeta).toHaveBeenCalledTimes(1) // a paused warehouse is not hammered with automatic retries
+
+    await userEvent.setup().click(screen.getByRole('button', { name: /try again/i }))
+    expect(await screen.findByText('1,23,45,678')).toBeInTheDocument() // the second attempt works
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('shows the page title and the filter controls', async () => {
     renderApp()
     expect(await screen.findByRole('heading', { name: 'Trips dashboard' })).toBeInTheDocument()

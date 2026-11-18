@@ -48,3 +48,9 @@ body {
     flex: 0 1 auto;
   }
 }
+
+/* The PrimeReact theme pins the root font size at 14px, which looks tiny on a large monitor.
+   Everything is sized in rem, so letting the root grow gently with the viewport scales the whole UI. */
+html:root {
+  font-size: clamp(14px, 0.35vw + 10px, 18px);
+}

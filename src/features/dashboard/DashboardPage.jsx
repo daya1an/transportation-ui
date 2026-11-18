@@ -1,5 +1,5 @@
-import { Message } from 'primereact/message'
 import { ProgressSpinner } from 'primereact/progressspinner'
+import ErrorPanel from '../../components/ErrorPanel'
 import { useKpis } from '../../hooks/queries'
 import PageHeader from '../../layout/PageHeader'
 import { formatDate } from '../../lib/dates'
@@ -31,10 +31,7 @@ function Stat({ label, value }) {
 /** Widgets arrive in the next batches. Today the page proves that filters drive the data and live refresh works. */
 export default function DashboardPage() {
   const filters = useFilters()
-  const { metaQuery: meta, city, dateFrom, dateTo, ready } = filters
-  const kpis = useKpis({ city, dateFrom, dateTo }, { enabled: ready })
-  const { events } = useLive()
-  const cityLabel = filters.cities.find((c) => c.key === city)?.label ?? 'All cities'
+  const { metaQuery: meta } = filters
 
   return (
     <div className="space-y-5">
@@ -44,8 +41,27 @@ export default function DashboardPage() {
         subtitle="Trips, sales and ratings across cities, refreshed the moment new data lands."
       />
 
-      {meta.isError ? <Message severity="error" text={meta.error.message} className="w-full justify-start" /> : <FilterBar filters={filters} />}
+      {meta.isError ? (
+        <ErrorPanel error={meta.error} onRetry={() => meta.refetch()} />
+      ) : (
+        <>
+          <FilterBar filters={filters} />
+          <DashboardBody />
+        </>
+      )}
+    </div>
+  )
+}
 
+function DashboardBody() {
+  const filters = useFilters()
+  const { metaQuery: meta, city, dateFrom, dateTo, ready } = filters
+  const kpis = useKpis({ city, dateFrom, dateTo }, { enabled: ready })
+  const { events } = useLive()
+  const cityLabel = filters.cities.find((c) => c.key === city)?.label ?? 'All cities'
+
+  return (
+    <div className="space-y-5">
       <div className="grid gap-4 md:grid-cols-2">
         <Panel title="Data">
           {meta.isPending && <Loading />}
@@ -62,7 +78,7 @@ export default function DashboardPage() {
 
         <Panel title={ready ? `${cityLabel}, ${formatDate(dateFrom)} to ${formatDate(dateTo)}` : 'Totals'}>
           {(!ready || kpis.isPending) && !kpis.isError && <Loading />}
-          {kpis.isError && <Message severity="error" text={kpis.error.message} />}
+          {kpis.isError && <ErrorPanel error={kpis.error} onRetry={() => kpis.refetch()} compact />}
           {kpis.data && (
             <div className="grid grid-cols-2 gap-4">
               <Stat label="Sales" value={formatNumber(kpis.data.total_sales.value)} />

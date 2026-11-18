@@ -7,7 +7,7 @@ export default function AppShell() {
   return (
     <LiveRefreshProvider>
       <div className="min-h-screen md:p-4">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-4 md:min-h-[calc(100vh-2rem)] md:flex-row">
+        <div className="flex w-full flex-col gap-4 md:min-h-[calc(100vh-2rem)] md:flex-row">
           <NavRail />
           <main className="min-w-0 flex-1 p-4 pb-24 md:p-0 md:pb-0">
             <Outlet />

@@ -9,12 +9,14 @@ import AppRoutes from './App'
 import { AuthProvider } from './features/auth/AuthProvider'
 import { createQueryClient } from './lib/queryClient'
 import { ThemeProvider } from './features/theme/ThemeProvider'
+import { ToastProvider } from './components/ToastProvider'
 
 const queryClient = createQueryClient()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider>
+    <ToastProvider>
       <PrimeReactProvider>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
@@ -24,6 +26,7 @@ createRoot(document.getElementById('root')).render(
           </AuthProvider>
         </QueryClientProvider>
       </PrimeReactProvider>
+      </ToastProvider>
     </ThemeProvider>
   </StrictMode>,
 )

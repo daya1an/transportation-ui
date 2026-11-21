@@ -6,22 +6,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as api from '../../api/endpoints'
 import { ApiError } from '../../api/errors'
 import AppRoutes from '../../App'
-import { AuthProvider } from '../auth/AuthProvider'
+import { ToastProvider } from '../../components/ToastProvider'
+import { describeExportError, saveBlob } from '../../lib/download'
 import { formatCurrencyCompact } from '../../lib/format'
 import { FakeEventSource } from '../../test/fakeEventSource'
+import { AuthProvider } from '../auth/AuthProvider'
 import { ThemeProvider } from '../theme/ThemeProvider'
 
 vi.mock('../../api/endpoints')
+
 vi.mock('primereact/chart', () => ({
   Chart: ({ type }) => <div data-testid={`prime-chart-${type}`} />,
 }))
+
+vi.mock('../../lib/download', async (importOriginal) => {
+  const actual = await importOriginal()
+  return { ...actual, saveBlob: vi.fn() }
+})
 
 const META = {
   min_date: '2025-08-01',
   max_date: '2025-12-27',
   data_version: 'transportation.silver.trips@4.0',
   default_window_days: 30,
-  cities: [{ key: 'all', label: 'All cities' }, { key: 'kochi', label: 'Kochi' }, { key: 'surat', label: 'Surat' }],
+  cities: [
+    { key: 'all', label: 'All cities' },
+    { key: 'kochi', label: 'Kochi' },
+    { key: 'surat', label: 'Surat' },
+  ],
 }
 const KPIS = {
   total_sales: { value: 12345678.4 },
@@ -55,14 +67,18 @@ const TRIPS_RESPONSE = {
 function renderApp() {
   return render(
     <ThemeProvider>
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <AuthProvider>
-          <MemoryRouter initialEntries={['/']}>
-            <AppRoutes />
-          </MemoryRouter>
-        </AuthProvider>
-      </QueryClientProvider>
-    </ThemeProvider>,
+      <ToastProvider>
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
+          <AuthProvider>
+            <MemoryRouter initialEntries={['/']}>
+              <AppRoutes />
+            </MemoryRouter>
+          </AuthProvider>
+        </QueryClientProvider>
+      </ToastProvider>
+    </ThemeProvider>
   )
 }
 
@@ -82,7 +98,9 @@ afterEach(() => vi.unstubAllGlobals())
 describe('dashboard shell and page', () => {
   it('shows data, theme switch and connection state, and no sign-out when auth is off', async () => {
     renderApp()
-    expect(await screen.findByText(/through/i)).toHaveTextContent('Data from 2025-08-01 through 2025-12-27')
+    expect(await screen.findByText(/through/i)).toHaveTextContent(
+      'Data from 2025-08-01 through 2025-12-27'
+    )
     expect(screen.getByText('2 cities')).toBeInTheDocument()
     expect(await screen.findByText(SALES_HEADLINE)).toBeInTheDocument()
     expect(screen.getByText('Connecting')).toBeInTheDocument()
@@ -91,7 +109,9 @@ describe('dashboard shell and page', () => {
   })
 
   it('shows the server error message when a query fails', async () => {
-    api.getKpis.mockRejectedValue(new ApiError({ status: 502, code: 'query_failed', message: 'Data query failed' }))
+    api.getKpis.mockRejectedValue(
+      new ApiError({ status: 502, code: 'query_failed', message: 'Data query failed' })
+    )
     renderApp()
     expect(await screen.findByText('Data query failed')).toBeInTheDocument()
   })
@@ -106,7 +126,12 @@ describe('dashboard shell and page', () => {
     expect(api.getKpis).toHaveBeenCalledTimes(1)
 
     api.getKpis.mockResolvedValue({ ...KPIS, total_trips: { value: 8 } })
-    act(() => FakeEventSource.instances[0].emit('refresh', JSON.stringify({ source: 'webhook', tables: ['fact_trips_kochi'] })))
+    act(() =>
+      FakeEventSource.instances[0].emit(
+        'refresh',
+        JSON.stringify({ source: 'webhook', tables: ['fact_trips_kochi'] })
+      )
+    )
 
     await waitFor(() => expect(api.getKpis).toHaveBeenCalledTimes(2))
     expect(await screen.findByText(/webhook · fact_trips_kochi/)).toBeInTheDocument()
@@ -117,17 +142,28 @@ describe('dashboard shell and page', () => {
     renderApp()
     const user = userEvent.setup()
     await screen.findByText(SALES_HEADLINE)
-    expect(api.getKpis).toHaveBeenLastCalledWith(expect.objectContaining({ city: 'all', dateFrom: '2025-11-28', dateTo: '2025-12-27' }), expect.anything())
+    expect(api.getKpis).toHaveBeenLastCalledWith(
+      expect.objectContaining({ city: 'all', dateFrom: '2025-11-28', dateTo: '2025-12-27' }),
+      expect.anything()
+    )
 
     await user.click(screen.getByRole('button', { name: /90 days/i }))
     await waitFor(() =>
-      expect(api.getKpis).toHaveBeenLastCalledWith(expect.objectContaining({ dateFrom: '2025-09-29', dateTo: '2025-12-27' }), expect.anything()),
+      expect(api.getKpis).toHaveBeenLastCalledWith(
+        expect.objectContaining({ dateFrom: '2025-09-29', dateTo: '2025-12-27' }),
+        expect.anything()
+      )
     )
   })
 
   it('shows one clear error with Try again when the warehouse is down, instead of an endless spinner', async () => {
     api.getMeta.mockRejectedValueOnce(
-      new ApiError({ status: 503, code: 'warehouse_unavailable', retryAfter: 5, message: 'The Databricks SQL warehouse is not accepting connections right now.' }),
+      new ApiError({
+        status: 503,
+        code: 'warehouse_unavailable',
+        retryAfter: 5,
+        message: 'The Databricks SQL warehouse is not accepting connections right now.',
+      })
     )
     renderApp()
     const alert = await screen.findByRole('alert')
@@ -158,9 +194,52 @@ describe('dashboard shell and page', () => {
       expect(api.getTrips).toHaveBeenLastCalledWith(
         expect.objectContaining({ city: 'all', dateFrom: '2025-11-28', dateTo: '2025-12-27' }),
         expect.objectContaining({ sortBy: 'sales_amt', sortDir: 'asc', page: 1 }),
-        expect.anything(),
-      ),
+        expect.anything()
+      )
     )
+  })
+
+  it('exports filtered trips as CSV and shows a success toast', async () => {
+    const blob = new Blob(['id,sales_amt\n1,850'], { type: 'text/csv' })
+    api.downloadTripsCsv.mockResolvedValueOnce({ blob, filename: 'trips_all.csv' })
+    renderApp()
+    const user = userEvent.setup()
+
+    await screen.findByText('Business')
+    await user.click(screen.getByRole('button', { name: /export csv/i }))
+
+    await waitFor(() =>
+      expect(api.downloadTripsCsv).toHaveBeenCalledWith(
+        { city: 'all', dateFrom: '2025-11-28', dateTo: '2025-12-27' },
+        expect.any(AbortSignal)
+      )
+    )
+    expect(saveBlob).toHaveBeenCalledWith(blob, 'trips_all.csv')
+    expect(await screen.findByText('Export downloaded')).toBeInTheDocument()
+    expect(screen.getByText('trips_all.csv')).toBeInTheDocument()
+  })
+
+  it('shows an error toast when CSV export fails', async () => {
+    const exportError = new ApiError({
+      status: 422,
+      code: 'export_limit_exceeded',
+      message: 'Too many rows to export',
+    })
+    api.downloadTripsCsv.mockRejectedValueOnce(exportError)
+    renderApp()
+    const user = userEvent.setup()
+
+    await screen.findByText('Business')
+    await user.click(screen.getByRole('button', { name: /export csv/i }))
+
+    const described = describeExportError(exportError)
+    const expectedDetail =
+      typeof described === 'string'
+        ? described
+        : described?.detail || described?.message || 'Could not download CSV'
+
+    expect(await screen.findByText(expectedDetail)).toBeInTheDocument()
+    expect(saveBlob).not.toHaveBeenCalled()
   })
 
   it('switches theme from the header', async () => {

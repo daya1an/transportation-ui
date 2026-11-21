@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Button } from 'primereact/button'
 import { ProgressSpinner } from 'primereact/progressspinner'
 import ErrorPanel from '../../components/ErrorPanel'
 import { useChart, useKpis, useMix, useTrips } from '../../hooks/queries'
@@ -13,6 +14,7 @@ import { MixPanel } from './charts/MixPanel'
 import { buildKpiCards } from './kpi/kpiModel'
 import { KpiGrid } from './kpi/KpiGrid'
 import { TripsTable } from './trips/TripsTable'
+import { useCsvExport } from './trips/useCsvExport'
 
 function Panel({ title, children }) {
   return (
@@ -63,6 +65,7 @@ function DashboardBody() {
   const [sort, setSort] = useState({ sortBy: 'business_date', sortDir: 'desc' })
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+  const { exportCsv, downloading } = useCsvExport()
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -115,7 +118,9 @@ function DashboardBody() {
   const tripTotal = trips.data?.total ?? tripRows.length
   const tripsLoading = !ready || trips.isPending
   const tripsRefreshing = trips.isFetching && !trips.isPending
-  
+  const exportDisabled =
+    !ready || tripsLoading || downloading || trips.isError || tripTotal === 0
+
   return (
     <div className="space-y-5">
       <KpiGrid
@@ -176,6 +181,17 @@ function DashboardBody() {
         onSearchChange={setSearchInput}
         onRetry={() => trips.refetch()}
         subtitle={ready ? cityLabel : undefined}
+        headerActions={
+          <Button
+            type="button"
+            label={downloading ? 'Exporting...' : 'Export CSV'}
+            icon={downloading ? 'pi pi-spin pi-spinner' : 'pi pi-download'}
+            size="small"
+            outlined
+            disabled={exportDisabled}
+            onClick={() => exportCsv(filterArgs)}
+          />
+        }
       />
 
       <div className="grid gap-4 md:grid-cols-2">

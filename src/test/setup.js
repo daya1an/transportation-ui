@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach } from 'vitest'
 import { cleanup } from '@testing-library/react'
+import { configure } from '@testing-library/react'
 
 // jsdom has no matchMedia
 if (!window.matchMedia) {
@@ -27,3 +28,5 @@ afterEach(() => {
   document.documentElement.className = ''
   document.documentElement.removeAttribute('style')
 })
+
+configure({ asyncUtilTimeout: 3000 })

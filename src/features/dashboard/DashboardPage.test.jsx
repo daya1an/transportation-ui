@@ -7,10 +7,14 @@ import * as api from '../../api/endpoints'
 import { ApiError } from '../../api/errors'
 import AppRoutes from '../../App'
 import { AuthProvider } from '../auth/AuthProvider'
+import { formatCurrencyCompact } from '../../lib/format'
 import { FakeEventSource } from '../../test/fakeEventSource'
 import { ThemeProvider } from '../theme/ThemeProvider'
 
 vi.mock('../../api/endpoints')
+vi.mock('primereact/chart', () => ({
+  Chart: ({ type }) => <div data-testid={`prime-chart-${type}`} />,
+}))
 
 const META = {
   min_date: '2025-08-01',
@@ -24,6 +28,28 @@ const KPIS = {
   total_trips: { value: 7 },
   total_distance_kms: { value: 50 },
   avg_passenger_rating: { value: 4.5 },
+}
+const SALES_HEADLINE = formatCurrencyCompact(KPIS.total_sales.value)
+const MIX_RESPONSE = {
+  items: [
+    { label: 'Jaipur', sales: 1500000, trips: 4200, share_pct: 60 },
+    { label: 'Kochi', sales: 1000000, trips: 2800, share_pct: 40 },
+  ],
+}
+const TRIPS_RESPONSE = {
+  items: [
+    {
+      id: 'trip-1',
+      business_date: '2025-12-20',
+      city_name: 'Surat',
+      passenger_category: 'Business',
+      distance_kms: 18.2,
+      sales_amt: 850,
+      passenger_rating: 4.7,
+      driver_rating: 4.8,
+    },
+  ],
+  total: 1,
 }
 
 function renderApp() {
@@ -47,6 +73,9 @@ beforeEach(() => {
   api.getAuthConfig.mockResolvedValue({ auth_required: false })
   api.getMeta.mockResolvedValue(META)
   api.getKpis.mockResolvedValue(KPIS)
+  api.getChart.mockResolvedValue({ buckets: [], series: [] })
+  api.getMix.mockResolvedValue(MIX_RESPONSE)
+  api.getTrips.mockResolvedValue(TRIPS_RESPONSE)
 })
 afterEach(() => vi.unstubAllGlobals())
 
@@ -55,7 +84,7 @@ describe('dashboard shell and page', () => {
     renderApp()
     expect(await screen.findByText(/through/i)).toHaveTextContent('Data from 2025-08-01 through 2025-12-27')
     expect(screen.getByText('2 cities')).toBeInTheDocument()
-    expect(await screen.findByText('1,23,45,678')).toBeInTheDocument() // Indian digit grouping
+    expect(await screen.findByText(SALES_HEADLINE)).toBeInTheDocument()
     expect(screen.getByText('Connecting')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /switch to (dark|light) theme/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument()
@@ -69,7 +98,7 @@ describe('dashboard shell and page', () => {
 
   it('goes live, then refetches and logs the update when a refresh event arrives', async () => {
     renderApp()
-    await screen.findByText('1,23,45,678')
+    await screen.findByText(SALES_HEADLINE)
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
 
     act(() => FakeEventSource.instances[0].open())
@@ -79,7 +108,7 @@ describe('dashboard shell and page', () => {
     api.getKpis.mockResolvedValue({ ...KPIS, total_trips: { value: 8 } })
     act(() => FakeEventSource.instances[0].emit('refresh', JSON.stringify({ source: 'webhook', tables: ['fact_trips_kochi'] })))
 
-    await waitFor(() => expect(api.getKpis).toHaveBeenCalledTimes(2)) // invalidated and refetched
+    await waitFor(() => expect(api.getKpis).toHaveBeenCalledTimes(2))
     expect(await screen.findByText(/webhook · fact_trips_kochi/)).toBeInTheDocument()
     expect(await screen.findByText('8')).toBeInTheDocument()
   })
@@ -87,14 +116,13 @@ describe('dashboard shell and page', () => {
   it('quick date ranges drive the data requests', async () => {
     renderApp()
     const user = userEvent.setup()
-    await screen.findByText('1,23,45,678')
+    await screen.findByText(SALES_HEADLINE)
     expect(api.getKpis).toHaveBeenLastCalledWith(expect.objectContaining({ city: 'all', dateFrom: '2025-11-28', dateTo: '2025-12-27' }), expect.anything())
 
     await user.click(screen.getByRole('button', { name: /90 days/i }))
     await waitFor(() =>
       expect(api.getKpis).toHaveBeenLastCalledWith(expect.objectContaining({ dateFrom: '2025-09-29', dateTo: '2025-12-27' }), expect.anything()),
     )
-    expect(await screen.findByText(/All cities, 29 Sept 2025 to 27 Dec 2025|All cities, 29 Sep 2025 to 27 Dec 2025/)).toBeInTheDocument()
   })
 
   it('shows one clear error with Try again when the warehouse is down, instead of an endless spinner', async () => {
@@ -104,12 +132,12 @@ describe('dashboard shell and page', () => {
     renderApp()
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('The data warehouse is not responding')
-    expect(screen.queryByRole('button', { name: /weekly/i })).not.toBeInTheDocument() // no filters without a city list
+    expect(screen.queryByRole('button', { name: /weekly/i })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Loading')).not.toBeInTheDocument()
-    expect(api.getMeta).toHaveBeenCalledTimes(1) // a paused warehouse is not hammered with automatic retries
+    expect(api.getMeta).toHaveBeenCalledTimes(1)
 
     await userEvent.setup().click(screen.getByRole('button', { name: /try again/i }))
-    expect(await screen.findByText('1,23,45,678')).toBeInTheDocument() // the second attempt works
+    expect(await screen.findByText(SALES_HEADLINE)).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
@@ -120,10 +148,25 @@ describe('dashboard shell and page', () => {
     expect(screen.getByLabelText('City')).toBeInTheDocument()
   })
 
+  it('renders trip rows and forwards sort updates to getTrips', async () => {
+    renderApp()
+    const user = userEvent.setup()
+    expect(await screen.findByText('Business')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('columnheader', { name: /sales/i }))
+    await waitFor(() =>
+      expect(api.getTrips).toHaveBeenLastCalledWith(
+        expect.objectContaining({ city: 'all', dateFrom: '2025-11-28', dateTo: '2025-12-27' }),
+        expect.objectContaining({ sortBy: 'sales_amt', sortDir: 'asc', page: 1 }),
+        expect.anything(),
+      ),
+    )
+  })
+
   it('switches theme from the header', async () => {
     renderApp()
     const user = userEvent.setup()
-    await screen.findByText('1,23,45,678')
+    await screen.findByText(SALES_HEADLINE)
     const before = document.documentElement.classList.contains('dark')
     await user.click(screen.getByRole('button', { name: /switch to (dark|light) theme/i }))
     expect(document.documentElement.classList.contains('dark')).toBe(!before)

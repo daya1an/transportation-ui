@@ -1,12 +1,18 @@
+import { useEffect, useState } from 'react'
 import { ProgressSpinner } from 'primereact/progressspinner'
 import ErrorPanel from '../../components/ErrorPanel'
-import { useKpis } from '../../hooks/queries'
+import { useChart, useKpis, useMix, useTrips } from '../../hooks/queries'
 import PageHeader from '../../layout/PageHeader'
-import { formatDate } from '../../lib/dates'
-import { formatClock, formatNumber, formatRating } from '../../lib/format'
+import { formatClock } from '../../lib/format'
 import FilterBar from '../filters/FilterBar'
 import { useFilters } from '../filters/useFilters'
 import { useLive } from '../realtime/LiveRefreshProvider'
+import { useTheme } from '../theme/ThemeProvider'
+import { CategoryChart } from './charts/CategoryChart'
+import { MixPanel } from './charts/MixPanel'
+import { buildKpiCards } from './kpi/kpiModel'
+import { KpiGrid } from './kpi/KpiGrid'
+import { TripsTable } from './trips/TripsTable'
 
 function Panel({ title, children }) {
   return (
@@ -17,18 +23,14 @@ function Panel({ title, children }) {
   )
 }
 
-const Loading = () => <ProgressSpinner style={{ width: '1.75rem', height: '1.75rem' }} strokeWidth="6" aria-label="Loading" />
+const Loading = () => (
+  <ProgressSpinner
+    style={{ width: '1.75rem', height: '1.75rem' }}
+    strokeWidth="6"
+    aria-label="Loading"
+  />
+)
 
-function Stat({ label, value }) {
-  return (
-    <div>
-      <div className="text-xs text-muted">{label}</div>
-      <div className="text-xl font-semibold text-fg">{value}</div>
-    </div>
-  )
-}
-
-/** Widgets arrive in the next batches. Today the page proves that filters drive the data and live refresh works. */
 export default function DashboardPage() {
   const filters = useFilters()
   const { metaQuery: meta } = filters
@@ -55,56 +57,163 @@ export default function DashboardPage() {
 
 function DashboardBody() {
   const filters = useFilters()
-  const { metaQuery: meta, city, dateFrom, dateTo, ready } = filters
-  const kpis = useKpis({ city, dateFrom, dateTo }, { enabled: ready })
+  const { metaQuery: meta, city, dateFrom, dateTo, granularity, ready } = filters
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+  const [sort, setSort] = useState({ sortBy: 'business_date', sortDir: 'desc' })
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput.trim())
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  useEffect(() => {
+    setPage(1)
+  }, [city, dateFrom, dateTo])
+
+  const filterArgs = { city, dateFrom, dateTo }
+  const kpis = useKpis(filterArgs, { enabled: ready })
+  const chart = useChart(filterArgs, granularity, { enabled: ready })
+  const mix = useMix(filterArgs, { enabled: ready })
+  const trips = useTrips(
+    filterArgs,
+    {
+      page,
+      pageSize,
+      sortBy: sort.sortBy,
+      sortDir: sort.sortDir,
+      search: search || undefined,
+    },
+    { enabled: ready }
+  )
   const { events } = useLive()
+  const themeState = useTheme()
+  const mode = themeState?.mode ?? themeState?.theme ?? 'dark'
   const cityLabel = filters.cities.find((c) => c.key === city)?.label ?? 'All cities'
 
+  const cards = kpis.data ? buildKpiCards(kpis.data) : []
+  const kpiLoading = !ready || kpis.isPending
+  const kpiRefreshing = kpis.isFetching && !kpis.isPending
+
+  const chartLoading = !ready || chart.isPending
+  const chartRefreshing = chart.isFetching && !chart.isPending
+
+  const mixLoading = !ready || mix.isPending
+  const mixRefreshing = mix.isFetching && !mix.isPending
+  const mixSubtitle = ready
+    ? city === 'all'
+      ? 'By city'
+      : `${cityLabel} by passenger category`
+    : undefined
+
+  const tripRows = trips.data?.items ?? trips.data?.rows ?? []
+  const tripTotal = trips.data?.total ?? tripRows.length
+  const tripsLoading = !ready || trips.isPending
+  const tripsRefreshing = trips.isFetching && !trips.isPending
+  
   return (
     <div className="space-y-5">
+      <KpiGrid
+        cards={cards}
+        loading={kpiLoading}
+        refreshing={kpiRefreshing}
+        error={kpis.isError ? kpis.error : null}
+        onRetry={() => kpis.refetch()}
+      />
+
+      <div className="grid gap-4 xl:grid-cols-12">
+        <div className="min-w-0 xl:col-span-7">
+          <CategoryChart
+            response={chart.data}
+            granularity={granularity}
+            mode={mode}
+            loading={chartLoading}
+            refreshing={chartRefreshing}
+            error={chart.isError ? chart.error : null}
+            onRetry={() => chart.refetch()}
+            subtitle={ready ? cityLabel : undefined}
+          />
+        </div>
+
+        <div className="min-w-0 xl:col-span-5">
+          <MixPanel
+            response={mix.data}
+            mode={mode}
+            loading={mixLoading}
+            refreshing={mixRefreshing}
+            error={mix.isError ? mix.error : null}
+            onRetry={() => mix.refetch()}
+            subtitle={mixSubtitle}
+          />
+        </div>
+      </div>
+
+      <TripsTable
+        rows={tripRows}
+        total={tripTotal}
+        page={page}
+        pageSize={pageSize}
+        sortBy={sort.sortBy}
+        sortDir={sort.sortDir}
+        search={searchInput}
+        loading={tripsLoading}
+        refreshing={tripsRefreshing}
+        error={trips.isError ? trips.error : null}
+        onPageChange={setPage}
+        onPageSizeChange={(nextSize) => {
+          setPageSize(nextSize)
+          setPage(1)
+        }}
+        onSortChange={(nextSort) => {
+          setSort(nextSort)
+          setPage(1)
+        }}
+        onSearchChange={setSearchInput}
+        onRetry={() => trips.refetch()}
+        subtitle={ready ? cityLabel : undefined}
+      />
+
       <div className="grid gap-4 md:grid-cols-2">
         <Panel title="Data">
           {meta.isPending && <Loading />}
           {meta.data && (
             <div className="space-y-1 text-sm text-fg">
               <div>
-                Data from <strong>{meta.data.min_date}</strong> through <strong>{meta.data.max_date}</strong>
+                Data from <strong>{meta.data.min_date}</strong> through{' '}
+                <strong>{meta.data.max_date}</strong>
               </div>
-              <div>{meta.data.cities.filter((c) => c.key !== 'all').length} cities</div>
-              <div className="break-all text-xs text-muted">Version {meta.data.data_version}</div>
+              <div>
+                {meta.data.cities.filter((c) => c.key !== 'all').length} cities
+              </div>
+              <div className="break-all text-xs text-muted">
+                Version {meta.data.data_version}
+              </div>
             </div>
           )}
         </Panel>
 
-        <Panel title={ready ? `${cityLabel}, ${formatDate(dateFrom)} to ${formatDate(dateTo)}` : 'Totals'}>
-          {(!ready || kpis.isPending) && !kpis.isError && <Loading />}
-          {kpis.isError && <ErrorPanel error={kpis.error} onRetry={() => kpis.refetch()} compact />}
-          {kpis.data && (
-            <div className="grid grid-cols-2 gap-4">
-              <Stat label="Sales" value={formatNumber(kpis.data.total_sales.value)} />
-              <Stat label="Trips" value={formatNumber(kpis.data.total_trips.value)} />
-              <Stat label="Distance (km)" value={formatNumber(kpis.data.total_distance_kms.value)} />
-              <Stat label="Passenger rating" value={formatRating(kpis.data.avg_passenger_rating.value)} />
-            </div>
+        <Panel title="Live updates">
+          {events.length === 0 ? (
+            <p className="text-sm text-muted">
+              Waiting for the next data refresh. New data appears here the moment
+              it lands.
+            </p>
+          ) : (
+            <ul className="space-y-1 text-sm text-fg">
+              {events.map((event) => (
+                <li key={event.receivedAt}>
+                  {formatClock(event.receivedAt)} · {event.source ?? 'refresh'}
+                  {event.tables?.length ? ` · ${event.tables.join(', ')}` : ''}
+                </li>
+              ))}
+            </ul>
           )}
         </Panel>
-
-        <div className="md:col-span-2">
-          <Panel title="Live updates">
-            {events.length === 0 ? (
-              <p className="text-sm text-muted">Waiting for the next data refresh. New data appears here the moment it lands.</p>
-            ) : (
-              <ul className="space-y-1 text-sm text-fg">
-                {events.map((event) => (
-                  <li key={event.receivedAt}>
-                    {formatClock(event.receivedAt)} · {event.source ?? 'refresh'}
-                    {event.tables?.length ? ` · ${event.tables.join(', ')}` : ''}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
-        </div>
       </div>
     </div>
   )

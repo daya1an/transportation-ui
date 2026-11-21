@@ -6,9 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as api from '../api/endpoints'
 import { ApiError } from '../api/errors'
 import AppRoutes from '../App'
-import { AuthProvider } from '../auth/AuthProvider'
+import { AuthProvider } from '../features/auth/AuthProvider'
+import { formatCurrencyCompact } from '../lib/format'
 import { FakeEventSource } from '../test/fakeEventSource'
-import { ThemeProvider } from '../theme/ThemeProvider'
+import { ThemeProvider } from '../features/theme/ThemeProvider'
 
 vi.mock('../api/endpoints')
 
@@ -24,6 +25,7 @@ const KPIS = {
   total_distance_kms: { value: 50 },
   avg_passenger_rating: { value: 4.5 },
 }
+const SALES_HEADLINE = formatCurrencyCompact(KPIS.total_sales.value)
 
 function renderApp() {
   return render(
@@ -54,7 +56,7 @@ describe('dashboard shell and page', () => {
     renderApp()
     expect(await screen.findByText(/through/i)).toHaveTextContent('Data from 2025-08-01 through 2025-12-27')
     expect(screen.getByText('2 cities')).toBeInTheDocument()
-    expect(await screen.findByText('1,23,45,678')).toBeInTheDocument() // Indian digit grouping
+    expect(await screen.findByText(SALES_HEADLINE)).toBeInTheDocument()
     expect(screen.getByText('Connecting')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /switch to (dark|light) theme/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument()
@@ -68,7 +70,7 @@ describe('dashboard shell and page', () => {
 
   it('goes live, then refetches and logs the update when a refresh event arrives', async () => {
     renderApp()
-    await screen.findByText('1,23,45,678')
+    await screen.findByText(SALES_HEADLINE)
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
 
     act(() => FakeEventSource.instances[0].open())
@@ -86,7 +88,7 @@ describe('dashboard shell and page', () => {
   it('switches theme from the header', async () => {
     renderApp()
     const user = userEvent.setup()
-    await screen.findByText('1,23,45,678')
+    await screen.findByText(SALES_HEADLINE)
     const before = document.documentElement.classList.contains('dark')
     await user.click(screen.getByRole('button', { name: /switch to (dark|light) theme/i }))
     expect(document.documentElement.classList.contains('dark')).toBe(!before)

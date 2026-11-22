@@ -1,14 +1,14 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+const repoName = process.env.GITHUB_REPOSITORY?.split('/')[1]
+
 export default defineConfig({
+  base: repoName ? `/${repoName}/` : '/',
   plugins: [react(), tailwindcss()],
-  server: { port: 5173 },
   test: {
     environment: 'jsdom',
-    globals: true,
     setupFiles: './src/test/setup.js',
-    css: false,
   },
 })

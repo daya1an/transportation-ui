@@ -20,7 +20,7 @@ createRoot(document.getElementById('root')).render(
       <PrimeReactProvider>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <BrowserRouter>
+            <BrowserRouter basename={import.meta.env.BASE_URL}>
               <AppRoutes />
             </BrowserRouter>
           </AuthProvider>

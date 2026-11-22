@@ -1,4 +1,5 @@
 import { Skeleton } from 'primereact/skeleton'
+import EmptyState from '../../components/EmptyState'
 import ErrorPanel from '../../components/ErrorPanel'
 
 const SKELETON_ROWS = [0, 1, 2, 3, 4, 5]
@@ -73,9 +74,11 @@ export function ColumnsPanel({
       ) : loading ? (
         <ColumnsSkeleton />
       ) : items.length === 0 ? (
-        <div className="flex h-36 items-center justify-center rounded-xl border border-dashed border-line text-sm text-muted">
-          No columns available for this table.
-        </div>
+        <EmptyState
+          icon="pi-list"
+          title="No columns available for this table."
+          compact
+        />
       ) : (
         <div
           data-testid="columns-table-wrap"

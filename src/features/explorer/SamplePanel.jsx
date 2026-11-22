@@ -1,4 +1,5 @@
 import { Skeleton } from 'primereact/skeleton'
+import EmptyState from '../../components/EmptyState'
 import ErrorPanel from '../../components/ErrorPanel'
 
 const LIMIT_OPTIONS = [10, 25, 50, 100]
@@ -117,9 +118,11 @@ export function SamplePanel({
       ) : loading ? (
         <SampleSkeleton />
       ) : safeRows.length === 0 || resolvedColumns.length === 0 ? (
-        <div className="flex h-36 items-center justify-center rounded-xl border border-dashed border-line text-sm text-muted">
-          No sample rows available for this table.
-        </div>
+        <EmptyState
+          icon="pi-database"
+          title="No sample rows available for this table."
+          compact
+        />
       ) : (
         <div
           data-testid="sample-table-wrap"

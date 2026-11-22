@@ -1,4 +1,5 @@
 import { Skeleton } from 'primereact/skeleton'
+import EmptyState from '../../components/EmptyState'
 import ErrorPanel from '../../components/ErrorPanel'
 import { formatNumber } from '../../lib/format'
 
@@ -68,11 +69,14 @@ export function TableList({
       ) : loading ? (
         <TableListSkeleton />
       ) : items.length === 0 ? (
-        <div className="flex h-36 items-center justify-center rounded-xl border border-dashed border-line text-sm text-muted">
-          No tables available.
-        </div>
+        <EmptyState
+          icon="pi-table"
+          title="No tables available."
+          description="Tables appear here once the warehouse responds."
+          compact
+        />
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="max-h-64 space-y-1.5 overflow-y-auto pr-1 lg:max-h-none lg:overflow-visible lg:pr-0">
           {items.map((item) => {
             const active = item.key === selectedKey
             return (
